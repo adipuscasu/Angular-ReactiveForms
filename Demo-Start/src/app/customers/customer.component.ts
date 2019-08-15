@@ -9,7 +9,21 @@ function ratingRange(min: number, max: number): ValidatorFn {
       return { 'range': true };
     }
     return null;
+  };
+}
+
+function emailMatcher(c: AbstractControl): { [key: string]: boolean } | null {
+  const emailControl = c.get('email');
+  const confirmControl = c.get('confirmEmail');
+
+  if (emailControl.pristine || confirmControl.pristine) {
+    return null;
   }
+
+  if (emailControl.value === confirmControl.value) {
+    return null;
+  }
+  return { 'match': true };
 }
 
 @Component({
@@ -20,6 +34,13 @@ function ratingRange(min: number, max: number): ValidatorFn {
 export class CustomerComponent implements OnInit {
   customer = new Customer();
   public customerForm: FormGroup;
+  emailControl: AbstractControl;
+  confirmEmailControl: AbstractControl;
+  emailMessage: string;
+  private validationMessages = {
+    required: 'Please enter your email.',
+    email: 'Please enter a valid email.'
+  };
 
   constructor(private formBuilder: FormBuilder) { }
 
@@ -27,12 +48,35 @@ export class CustomerComponent implements OnInit {
     this.customerForm = this.formBuilder.group({
       firstName: ['', [Validators.required, Validators.minLength(3)]],
       lastName: ['', [Validators.required, Validators.minLength(50)]],
-      email: ['', [Validators.required, Validators.email]],
+      emailGroup: this.formBuilder.group({
+        email: ['', [Validators.required, Validators.email]],
+        confirmEmail: ['', Validators.required],
+      }, { validator: emailMatcher }),
       phone: '',
       notification: 'email',
       sendCatalog: true,
-      rating: [null, ratingRange(1,5)]
+      rating: [null, ratingRange(1, 5)]
     });
+
+    this.customerForm.get('notification').valueChanges.subscribe(
+      value => this.setNotification(value)
+    );
+    this.watchEmailControl();
+  }
+
+  watchEmailControl() {
+    const emailControl = this.customerForm.get('emailGroup.email');
+    emailControl.valueChanges.subscribe(
+      value => this.setMessage(emailControl)
+    );
+  }
+
+  setMessage(c: AbstractControl): void {
+    this.emailMessage = '';
+    if ((c.touched || c.dirty) && c.errors) {
+      this.emailMessage = Object.keys(c.errors).map(
+        key => this.emailMessage += this.validationMessages[key]).join(' ');
+    }
   }
 
   save() {
@@ -41,21 +85,12 @@ export class CustomerComponent implements OnInit {
   }
 
   setNotification(notifyVia: string): void {
-    const emailControl = this.customerForm.get('email');
     const phoneControl = this.customerForm.get('phone');
-    phoneControl.clearValidators();
-    emailControl.clearValidators();
-
-
-    if (notifyVia === 'email') {
-      emailControl.setValidators([Validators.required, Validators.email]);
-
-    } else {
+    if (notifyVia === 'text') {
       phoneControl.setValidators(Validators.required);
+    } else {
+      phoneControl.clearValidators();
     }
     phoneControl.updateValueAndValidity();
-    emailControl.updateValueAndValidity();
-
-
   }
 }
